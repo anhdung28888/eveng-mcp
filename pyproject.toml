@@ -140,6 +140,9 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "live_eveng: marks tests that require a reachable live EVE-NG server",
+    "stdio: marks tests that exercise the MCP stdio transport",
+    "sse: marks tests that exercise the MCP SSE transport",
 ]
 
 [tool.coverage.run]

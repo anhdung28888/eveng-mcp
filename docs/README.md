@@ -28,7 +28,7 @@ A comprehensive Model Context Protocol (MCP) server for EVE-NG network emulation
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.11 or higher
 - EVE-NG server (6.0.0 or higher)
 - UV package manager (recommended) or pip
 
@@ -117,8 +117,8 @@ docker run -p 8000:8000 eveng-mcp-server
 git clone https://github.com/your-org/eveng-mcp-server.git
 cd eveng-mcp-server
 
-# Install with development dependencies
-uv sync --dev
+# Install with test and development dependencies
+uv sync --extra test
 
 # Install pre-commit hooks
 pre-commit install
@@ -355,13 +355,14 @@ See the [Deployment Guide](deployment/README.md) for detailed production deploym
 
 ## 🧪 Testing
 
-See the [Testing Guide](testing/README.md) for comprehensive testing procedures:
+See the repository [Testing Guide](../tests/README.md) for the maintained integration workflow.
 
-- [Unit Tests](testing/unit.md)
-- [Integration Tests](testing/integration.md)
-- [End-to-End Tests](testing/e2e.md)
-- [Performance Tests](testing/performance.md)
-- [MCP Inspector Testing](testing/inspector.md)
+The automated gate is integration-only and covers:
+
+- CLI verification
+- MCP `stdio` transport
+- MCP `sse` transport
+- live EVE-NG workflows when credentials are provided
 
 ## 🔧 Troubleshooting
 

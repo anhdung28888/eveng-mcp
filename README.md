@@ -182,12 +182,25 @@ uv run eveng-mcp-server version
 
 ## Testing
 
-```bash
-# Test EVE-NG connection
-uv run eveng-mcp-server test-connection
+Automated testing is integration-focused.
 
-# Run the server
-uv run eveng-mcp-server run
+```bash
+# Install integration test dependencies
+uv sync --extra test
+
+# Collect maintained integration tests
+uv run python -m pytest tests/integration --collect-only -q
+
+# Run non-live integration tests
+uv run python -m pytest tests/integration -m "not live_eveng" -q
+
+# Run live integration tests
+uv run python -m pytest tests/integration -m live_eveng -q \
+  --eveng-host 192.168.168.141 \
+  --eveng-user admin \
+  --eveng-pass eve \
+  --eveng-port 80 \
+  --eveng-protocol http
 ```
 
 ## 📚 Documentation
@@ -213,7 +226,7 @@ uv run eveng-mcp-server run
 - ✅ **Production Ready** - Complete MCP server implementation
 - ✅ **EVE-NG Integration** - Full API coverage with 25 tools
 - ✅ **Client Integrations** - Claude Desktop and VS Code support
-- ✅ **Comprehensive Testing** - Unit, integration, and E2E tests
+- ✅ **Comprehensive Testing** - Maintained integration test suite for CLI, stdio, SSE, and live EVE-NG workflows
 - ✅ **Production Deployment** - Docker, Kubernetes, systemd ready
 - ✅ **Complete Documentation** - API reference, guides, and examples
 - ✅ **MCP Resources** - 4 dynamic and static resources

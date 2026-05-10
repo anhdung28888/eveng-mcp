@@ -1,149 +1,156 @@
-#!/usr/bin/env python3
-"""
-Test MCP server via HTTP requests
-"""
+"""Integration tests for MCP stdio workflows."""
 
-import asyncio
-import json
-import httpx
+from __future__ import annotations
 
-async def test_mcp_lab_creation():
-    """Test lab creation via MCP HTTP interface"""
-    
-    print("🧪 Testing MCP Server via HTTP")
-    print("=" * 40)
-    
-    base_url = "http://localhost:8000"
-    
-    async with httpx.AsyncClient(timeout=30.0) as client:
+from contextlib import asynccontextmanager
+from datetime import timedelta
+from pathlib import Path
+from uuid import uuid4
+
+import pytest
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+
+EXPECTED_TOOLS = {
+    "connect_eveng_server",
+    "disconnect_eveng_server",
+    "test_connection",
+    "get_server_info",
+    "list_labs",
+    "create_lab",
+    "get_lab_details",
+    "delete_lab",
+}
+
+EXPECTED_RESOURCES = {
+    "eveng://server/status",
+    "eveng://help/api-reference",
+    "eveng://help/topology-examples",
+    "eveng://help/troubleshooting",
+}
+
+EXPECTED_PROMPTS = {
+    "create_simple_lab",
+    "create_enterprise_topology",
+    "diagnose_connectivity",
+    "configure_lab_automation",
+    "analyze_lab_performance",
+    "debug_node_issues",
+}
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+@asynccontextmanager
+async def stdio_session(python_executable: str, server_env: dict[str, str]):
+    """Create a stdio MCP session against the local project."""
+    params = StdioServerParameters(
+        command=python_executable,
+        args=["-m", "eveng_mcp_server.cli", "run", "--transport", "stdio"],
+        env=server_env,
+        cwd=PROJECT_ROOT,
+    )
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            yield session
+
+
+def _text_content(result) -> str:
+    """Extract the first text payload from a tool result."""
+    if not result.content:
+        return ""
+    return result.content[0].text
+
+
+@pytest.mark.asyncio
+@pytest.mark.stdio
+async def test_stdio_surface_lists_tools_resources_and_prompts(
+    python_executable: str, server_env: dict[str, str]
+) -> None:
+    """The stdio server should expose the expected MCP surface."""
+    async with stdio_session(python_executable, server_env) as session:
+        tools = await session.list_tools()
+        tool_names = {tool.name for tool in tools.tools}
+        assert EXPECTED_TOOLS.issubset(tool_names)
+        assert len(tool_names) >= 26
+
+        resources = await session.list_resources()
+        resource_uris = {str(resource.uri) for resource in resources.resources}
+        assert resource_uris == EXPECTED_RESOURCES
+
+        prompts = await session.list_prompts()
+        prompt_names = {prompt.name for prompt in prompts.prompts}
+        assert prompt_names == EXPECTED_PROMPTS
+
+
+@pytest.mark.asyncio
+@pytest.mark.live_eveng
+@pytest.mark.stdio
+async def test_stdio_live_eveng_lab_workflow(
+    python_executable: str,
+    server_env: dict[str, str],
+    require_live_eveng: dict[str, str | int],
+) -> None:
+    """The stdio server should manage a real lab against EVE-NG."""
+    lab_name = f"codex-int-{uuid4().hex[:8]}"
+    lab_path = f"/{lab_name}.unl"
+
+    async with stdio_session(python_executable, server_env) as session:
+        connect_result = await session.call_tool(
+            "connect_eveng_server",
+            {
+                "arguments": {
+                    "host": require_live_eveng["host"],
+                    "username": require_live_eveng["username"],
+                    "password": require_live_eveng["password"],
+                    "port": require_live_eveng["port"],
+                    "protocol": require_live_eveng["protocol"],
+                }
+            },
+            read_timeout_seconds=timedelta(seconds=45),
+        )
+        assert not connect_result.isError
+        assert "Successfully connected" in _text_content(connect_result)
+
+        test_result = await session.call_tool("test_connection", {"arguments": {}})
+        assert not test_result.isError
+        assert "Connection test successful" in _text_content(test_result)
+
+        create_result = await session.call_tool(
+            "create_lab",
+            {
+                "name": lab_name,
+                "path": "/",
+                "description": "Integration test lab",
+                "author": "Codex",
+                "version": "1",
+            },
+            read_timeout_seconds=timedelta(seconds=45),
+        )
+        assert not create_result.isError
+        assert "Successfully created lab" in _text_content(create_result)
+
         try:
-            # Test 1: Initialize MCP session
-            print("📡 Step 1: Initialize MCP session")
-            init_request = {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {},
-                    "clientInfo": {
-                        "name": "test-client",
-                        "version": "1.0.0"
-                    }
-                }
-            }
-            
-            response = await client.post(f"{base_url}/messages", json=init_request)
-            print(f"✅ Initialize response: {response.status_code}")
-            if response.status_code == 200:
-                result = response.json()
-                print(f"   Server info: {result.get('result', {}).get('serverInfo', {})}")
-            
-            # Test 2: List tools
-            print("\n🔧 Step 2: List available tools")
-            tools_request = {
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "tools/list"
-            }
-            
-            response = await client.post(f"{base_url}/messages", json=tools_request)
-            print(f"✅ Tools list response: {response.status_code}")
-            if response.status_code == 200:
-                result = response.json()
-                tools = result.get('result', {}).get('tools', [])
-                print(f"   Found {len(tools)} tools")
-                lab_tools = [t['name'] for t in tools if 'lab' in t['name']]
-                print(f"   Lab tools: {lab_tools}")
-            
-            # Test 3: Connect to EVE-NG
-            print("\n🔗 Step 3: Connect to EVE-NG server")
-            connect_request = {
-                "jsonrpc": "2.0",
-                "id": 3,
-                "method": "tools/call",
-                "params": {
-                    "name": "connect_eveng_server",
-                    "arguments": {
-                        "host": "eve.local",
-                        "username": "admin",
-                        "password": "eve",
-                        "port": 80,
-                        "protocol": "http"
-                    }
-                }
-            }
-            
-            response = await client.post(f"{base_url}/messages", json=connect_request)
-            print(f"✅ Connect response: {response.status_code}")
-            if response.status_code == 200:
-                result = response.json()
-                print(f"   Connect result: {result.get('result', {})}")
-            else:
-                print(f"   Error: {response.text}")
-                return
-            
-            # Test 4: List existing labs
-            print("\n📋 Step 4: List existing labs")
-            list_labs_request = {
-                "jsonrpc": "2.0",
-                "id": 4,
-                "method": "tools/call",
-                "params": {
-                    "name": "list_labs",
-                    "arguments": {
-                        "path": "/"
-                    }
-                }
-            }
-            
-            response = await client.post(f"{base_url}/messages", json=list_labs_request)
-            print(f"✅ List labs response: {response.status_code}")
-            if response.status_code == 200:
-                result = response.json()
-                print(f"   Labs result: {result.get('result', {})}")
-            
-            # Test 5: Create test lab
-            print("\n🏗️ Step 5: Create test lab")
-            create_lab_request = {
-                "jsonrpc": "2.0",
-                "id": 5,
-                "method": "tools/call",
-                "params": {
-                    "name": "create_lab",
-                    "arguments": {
-                        "name": "mcp_test_lab",
-                        "description": "Test lab created via MCP HTTP interface",
-                        "author": "MCP Testing",
-                        "version": "1.0",
-                        "path": "/"
-                    }
-                }
-            }
-            
-            response = await client.post(f"{base_url}/messages", json=create_lab_request)
-            print(f"✅ Create lab response: {response.status_code}")
-            if response.status_code == 200:
-                result = response.json()
-                print(f"   Create result: {result.get('result', {})}")
-            else:
-                print(f"   Error: {response.text}")
-            
-            # Test 6: List labs again
-            print("\n📋 Step 6: List labs after creation")
-            response = await client.post(f"{base_url}/messages", json=list_labs_request)
-            print(f"✅ List labs (after) response: {response.status_code}")
-            if response.status_code == 200:
-                result = response.json()
-                print(f"   Updated labs: {result.get('result', {})}")
-            
-            print("\n🎉 MCP HTTP Test Complete!")
-            print("👀 Please check your EVE-NG UI - you should see 'mcp_test_lab.unl'")
-            
-        except Exception as e:
-            print(f"❌ Error during HTTP test: {e}")
-            import traceback
-            traceback.print_exc()
+            labs_result = await session.call_tool("list_labs", {"path": "/"})
+            assert not labs_result.isError
+            assert lab_name in _text_content(labs_result)
 
-if __name__ == "__main__":
-    asyncio.run(test_mcp_lab_creation())
+            details_result = await session.call_tool(
+                "get_lab_details",
+                {"lab_path": lab_path},
+                read_timeout_seconds=timedelta(seconds=45),
+            )
+            assert not details_result.isError
+            details_text = _text_content(details_result)
+            assert "Lab Details" in details_text
+            assert lab_name in details_text
+        finally:
+            delete_result = await session.call_tool(
+                "delete_lab",
+                {"lab_path": lab_path},
+                read_timeout_seconds=timedelta(seconds=45),
+            )
+            assert not delete_result.isError
+            assert "Successfully deleted lab" in _text_content(delete_result)

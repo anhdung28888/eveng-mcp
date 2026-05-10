@@ -315,6 +315,18 @@ class EVENGClientWrapper(LoggerMixin):
             )
             raise EVENGAPIError(f"Failed to create lab: {str(e)}")
 
+    async def delete_lab(self, lab_path: str) -> Dict[str, Any]:
+        """Delete a lab."""
+        await self.ensure_connected()
+
+        try:
+            result = await asyncio.to_thread(self.api.delete_lab, lab_path)
+            self.logger.info("Deleted lab", lab_path=lab_path)
+            return result
+        except Exception as e:
+            self.logger.error("Failed to delete lab", **log_error(e, {"lab_path": lab_path}))
+            raise EVENGAPIError(f"Failed to delete lab: {str(e)}")
+
     # Node Management Methods
     async def list_node_templates(self) -> Dict[str, Any]:
         """List available node templates."""

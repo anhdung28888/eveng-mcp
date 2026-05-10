@@ -1,7 +1,7 @@
 """Configuration management for EVE-NG MCP Server."""
 
 import os
-from typing import Optional, List
+from typing import Any, Optional
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
@@ -124,6 +124,18 @@ class AppConfig(BaseSettings):
         if config_file and os.path.exists(config_file):
             return cls(_env_file=config_file)
         return cls()
+
+    @field_validator("debug", "testing", mode="before")
+    @classmethod
+    def normalize_bool_settings(cls, value: Any) -> Any:
+        """Tolerate common deployment strings for boolean settings."""
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on", "debug", "dev", "development"}:
+                return True
+            if normalized in {"0", "false", "no", "off", "release", "prod", "production"}:
+                return False
+        return value
 
 
 # Global configuration instance
