@@ -879,3 +879,88 @@ Ket luan thao tac:
 - Buoc sua blocker da hoan thanh
 - He thong san sang de sang phase tiep theo: viet `Node lifecycle` test voi `vpcs`
 - Khi sang phase do, nen bo sung retry/reconnect nhe cho cac workflow live dai hoi neu gap lai `412`
+
+### Ket qua dieu tra va xac nhan loi `412 User is not authenticated or session timed out (90001)`
+
+Da thuc hien dieu tra truc tiep tren EVE-NG `192.168.168.141` qua SSH va doi chieu voi cac workflow MCP/e2e.
+
+#### 1. Nguyen nhan goc da xac nhan
+
+Da xac nhan day khong phai la timeout ngau nhien cua network hay loi parser/tool, ma la gioi han session theo username cua EVE-NG:
+
+- moi login se cap cookie `unetlab_session` moi
+- backend chi luu 1 cookie active tren moi username
+- khi mot client khac dang nhap cung username, cookie cu bi ghi de
+- cac request tiep theo tu session cu se nhan `412 User is not authenticated or session timed out (90001)`
+
+Bang chung thu duoc:
+
+- trong `api_authentication.php`, moi API call deu di qua `apiAuthorization()`
+- trong `functions.php`, `getUserByCookie()` chi authorize khi cookie hien tai con hop le
+- trong `functions.php`, `updateUserCookie()` ghi de cookie/session cua user
+- khi tai hien voi 2 client cung dang nhap bang `admin`, client login sau lam client login truoc lap tuc nhan `412`
+
+#### 2. Cach khac phuc van hanh da ap dung
+
+Da chuyen workflow MCP sang dung tai khoan rieng:
+
+- username: `mcp`
+- password: `eve`
+
+Muc dich:
+
+- tach session MCP khoi cac session GUI/debug dang dung `admin`
+- tranh bi client khac cung username ghi de cookie session
+
+#### 3. Ket qua chay lai cac case `e2e` lien quan den edit lab
+
+Da chay lai mot workflow live qua MCP `stdio` voi user `mcp`, bao phu cac thao tac chinh sua bai lab tu cac case `e2e` cu:
+
+- `create_lab`
+- `add_node` x2
+- `create_lab_network`
+- `connect_node_to_network`
+- `connect_node_to_node`
+- `get_lab_topology`
+- `delete_node`
+- `delete_lab`
+
+Ket qua:
+
+- toan bo workflow edit lab: pass
+- khong con gap `412` trong suot workflow nay
+
+Da chay them mot workflow rong hon co ca `start_node` de kiem tra bo sung:
+
+- cac thao tac edit topology van pass
+- `start_node` fail voi:
+  - `400 Failed to start node (12)`
+
+Ket luan:
+
+- loi `400 Failed to start node (12)` la loi runtime cua thao tac start node
+- khong lien quan den bug session/auth `412`
+
+#### 4. Xac nhan qua SSH va access log tren EVE-NG
+
+Da doi chieu access log truoc va sau khi chay workflow `edit lab` bang user `mcp`.
+
+Xac nhan:
+
+- trong doan log cua workflow moi, tat ca request lien quan CRUD/wiring topology deu tra `200` hoac `201`
+- khong co dong `412` nao trong doan log cua lan chay nay
+- cac dong `412` con xuat hien trong file log deu thuoc cac lan tai hien cu bang user `admin` hoac cac session login trung username
+
+#### 5. Ket luan van hanh hien tai
+
+Co the xem bug `412` da duoc giai quyet cho mo hinh chay hien tai:
+
+- 1 user rieng cho MCP
+- 1 session MCP cho 1 workflow
+- khong dang nhap song song cung username tu client khac
+
+Luu y con lai:
+
+- gioi han kien truc single-session-per-username cua EVE-NG van con ton tai
+- neu sau nay co nhieu client cung dang nhap bang chinh user `mcp`, loi `412` co the xuat hien tro lai
+- neu can harden them, buoc tiep theo hop ly la bo sung reconnect/retry nhe khi client gap `412`
