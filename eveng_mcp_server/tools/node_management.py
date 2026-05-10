@@ -27,6 +27,17 @@ def _get_status_text(status: int) -> str:
     return status_map.get(status, f"Unknown ({status})")
 
 
+def _coerce_template_details(template_name: str, template_value: Any) -> Dict[str, Any]:
+    """Normalize template metadata returned by the backend."""
+    if isinstance(template_value, dict):
+        details: Dict[str, Any] = dict(template_value)
+    else:
+        details = {"description": str(template_value)}
+    details.setdefault("type", "Unknown")
+    details.setdefault("description", template_name)
+    return details
+
+
 class ListNodesArgs(BaseModel):
     """Arguments for list_nodes tool."""
     lab_path: str = Field(description="Full path to the lab (e.g., /lab_name.unl)")
@@ -111,13 +122,14 @@ def register_node_tools(mcp: "FastMCP", eveng_client: "EVENGClientWrapper") -> N
             templates_text = "Available Node Templates:\n\n"
 
             for template_name, template_info in templates['data'].items():
+                template_details = _coerce_template_details(template_name, template_info)
                 templates_text += f"📦 {template_name}\n"
-                templates_text += f"   Type: {template_info.get('type', 'Unknown')}\n"
-                templates_text += f"   Description: {template_info.get('description', 'No description')}\n"
+                templates_text += f"   Type: {template_details.get('type', 'Unknown')}\n"
+                templates_text += f"   Description: {template_details.get('description', 'No description')}\n"
 
                 # Show available images if any
-                if 'listimages' in template_info and template_info['listimages']:
-                    templates_text += f"   Images: {', '.join(template_info['listimages'])}\n"
+                if template_details.get('listimages'):
+                    templates_text += f"   Images: {', '.join(template_details['listimages'])}\n"
 
                 templates_text += "\n"
 

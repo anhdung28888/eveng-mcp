@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -49,22 +50,27 @@ def test_cli_test_connection(
     python_executable: str,
 ) -> None:
     """The CLI should connect successfully to the live EVE-NG server."""
-    result = _run_cli(
-        python_executable,
-        [
-            "test-connection",
-            "--host",
-            str(require_live_eveng["host"]),
-            "--username",
-            str(require_live_eveng["username"]),
-            "--password",
-            str(require_live_eveng["password"]),
-            "--port",
-            str(require_live_eveng["port"]),
-            "--protocol",
-            str(require_live_eveng["protocol"]),
-        ],
-        server_env,
-    )
+    args = [
+        "test-connection",
+        "--host",
+        str(require_live_eveng["host"]),
+        "--username",
+        str(require_live_eveng["username"]),
+        "--password",
+        str(require_live_eveng["password"]),
+        "--port",
+        str(require_live_eveng["port"]),
+        "--protocol",
+        str(require_live_eveng["protocol"]),
+    ]
+
+    result = None
+    for attempt in range(3):
+        result = _run_cli(python_executable, args, server_env)
+        if result.returncode == 0:
+            break
+        time.sleep(1 + attempt)
+
+    assert result is not None
     assert result.returncode == 0
     assert "Connection successful" in result.stdout

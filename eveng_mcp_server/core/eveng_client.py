@@ -521,6 +521,28 @@ class EVENGClientWrapper(LoggerMixin):
             self.logger.error("Failed to get lab network", **log_error(e, {"lab_path": lab_path, "net_id": net_id}))
             raise EVENGAPIError(f"Failed to get lab network: {str(e)}")
 
+    async def _resolve_node_name(self, lab_path: str, node_ref: str) -> str:
+        """Resolve a node reference to the node name expected by the SDK."""
+        try:
+            node = await self.get_node(lab_path, node_ref)
+            node_data = node.get("data", {})
+            if isinstance(node_data, dict) and node_data.get("name"):
+                return str(node_data["name"])
+        except Exception:
+            pass
+        return node_ref
+
+    async def _resolve_network_name(self, lab_path: str, network_ref: str) -> str:
+        """Resolve a network reference to the network name expected by the SDK."""
+        try:
+            network = await self.get_lab_network(lab_path, int(network_ref))
+            network_data = network.get("data", {})
+            if isinstance(network_data, dict) and network_data.get("name"):
+                return str(network_data["name"])
+        except Exception:
+            pass
+        return network_ref
+
     async def add_lab_network(self, lab_path: str, network_type: str, **kwargs) -> Dict[str, Any]:
         """Add a network to a lab."""
         await self.ensure_connected()
@@ -550,8 +572,21 @@ class EVENGClientWrapper(LoggerMixin):
         await self.ensure_connected()
 
         try:
-            result = await asyncio.to_thread(self.api.connect_node_to_cloud, lab_path, src, src_label, dst)
-            self.logger.info("Connected node to cloud", lab_path=lab_path, src=src, dst=dst)
+            src_name = await self._resolve_node_name(lab_path, src)
+            dst_name = await self._resolve_network_name(lab_path, dst)
+            result = await asyncio.to_thread(
+                self.api.connect_node_to_cloud,
+                lab_path,
+                src_name,
+                src_label,
+                dst_name,
+            )
+            self.logger.info(
+                "Connected node to cloud",
+                lab_path=lab_path,
+                src=src_name,
+                dst=dst_name,
+            )
             return result
         except Exception as e:
             self.logger.error("Failed to connect node to cloud", **log_error(e, {"lab_path": lab_path, "src": src, "dst": dst}))
@@ -562,8 +597,17 @@ class EVENGClientWrapper(LoggerMixin):
         await self.ensure_connected()
 
         try:
-            result = await asyncio.to_thread(self.api.connect_node_to_node, lab_path, src, src_label, dst, dst_label)
-            self.logger.info("Connected nodes", lab_path=lab_path, src=src, dst=dst)
+            src_name = await self._resolve_node_name(lab_path, src)
+            dst_name = await self._resolve_node_name(lab_path, dst)
+            result = await asyncio.to_thread(
+                self.api.connect_node_to_node,
+                lab_path,
+                src_name,
+                src_label,
+                dst_name,
+                dst_label,
+            )
+            self.logger.info("Connected nodes", lab_path=lab_path, src=src_name, dst=dst_name)
             return result
         except Exception as e:
             self.logger.error("Failed to connect nodes", **log_error(e, {"lab_path": lab_path, "src": src, "dst": dst}))

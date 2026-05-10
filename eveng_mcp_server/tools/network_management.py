@@ -16,6 +16,26 @@ from ..core.exceptions import EVENGAPIError
 logger = get_logger("NetworkManagementTools")
 
 
+def _coerce_network_type_details(type_name: str, type_value: Any) -> Dict[str, Any]:
+    """Normalize network type metadata returned by the backend."""
+    if isinstance(type_value, dict):
+        details: Dict[str, Any] = dict(type_value)
+    else:
+        details = {"description": str(type_value), "type": str(type_value)}
+    details.setdefault("type", type_name)
+    details.setdefault("description", str(type_value))
+    return details
+
+
+def _coerce_topology_entries(payload: Any) -> List[Dict[str, Any]]:
+    """Normalize topology payload to a list of connection dictionaries."""
+    if isinstance(payload, list):
+        return [entry for entry in payload if isinstance(entry, dict)]
+    if isinstance(payload, dict):
+        return [entry for entry in payload.values() if isinstance(entry, dict)]
+    return []
+
+
 class ListNetworksArgs(BaseModel):
     """Arguments for list_networks tool."""
     lab_path: str = Field(description="Full path to the lab (e.g., /lab_name.unl)")
@@ -39,17 +59,17 @@ class DeleteNetworkArgs(BaseModel):
 class ConnectNodeToNetworkArgs(BaseModel):
     """Arguments for connect_node_to_network tool."""
     lab_path: str = Field(description="Full path to the lab (e.g., /lab_name.unl)")
-    node_id: str = Field(description="Source node ID")
-    node_interface: str = Field(description="Node interface name (e.g., 'Gi0/0', 'eth0')")
-    network_id: str = Field(description="Target network ID")
+    node_id: str = Field(description="Source node ID or name")
+    node_interface: str = Field(description="Node interface name (e.g., 'e0', 'Gi0/0', 'eth0')")
+    network_id: str = Field(description="Target network ID or name")
 
 
 class ConnectNodeToNodeArgs(BaseModel):
     """Arguments for connect_node_to_node tool."""
     lab_path: str = Field(description="Full path to the lab (e.g., /lab_name.unl)")
-    src_node_id: str = Field(description="Source node ID")
+    src_node_id: str = Field(description="Source node ID or name")
     src_interface: str = Field(description="Source node interface name")
-    dst_node_id: str = Field(description="Destination node ID")
+    dst_node_id: str = Field(description="Destination node ID or name")
     dst_interface: str = Field(description="Destination node interface name")
 
 
@@ -91,9 +111,10 @@ def register_network_tools(mcp: "FastMCP", eveng_client: "EVENGClientWrapper") -
             types_text = "Available Network Types:\n\n"
 
             for type_name, type_info in network_types['data'].items():
+                type_details = _coerce_network_type_details(type_name, type_info)
                 types_text += f"🌐 {type_name}\n"
-                types_text += f"   Description: {type_info.get('description', 'No description')}\n"
-                types_text += f"   Type: {type_info.get('type', 'Unknown')}\n"
+                types_text += f"   Description: {type_details.get('description', 'No description')}\n"
+                types_text += f"   Type: {type_details.get('type', 'Unknown')}\n"
                 types_text += "\n"
 
             return [TextContent(
@@ -374,12 +395,12 @@ def register_network_tools(mcp: "FastMCP", eveng_client: "EVENGClientWrapper") -
             # Format topology information
             topology_text = f"Lab Topology: {arguments.lab_path}\n\n"
 
-            topology_data = topology['data']
+            topology_data = _coerce_topology_entries(topology['data'])
 
             # Show connections
             topology_text += "🔗 Connections:\n"
             if topology_data:
-                for connection_id, connection in topology_data.items():
+                for connection in topology_data:
                     src_type = "Node" if connection.get('source_type') == 'node' else "Network"
                     dst_type = "Node" if connection.get('destination_type') == 'node' else "Network"
 

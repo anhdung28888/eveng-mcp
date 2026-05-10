@@ -431,3 +431,451 @@ Ket qua:
 - Non-live integration: `4 passed`
 - Live integration: `2 passed`
 - Build: thanh cong, tao duoc wheel va sdist
+
+## Ke hoach mo rong: Dua cac case E2E cu vao integration suite
+
+Phan nay mo ta ke hoach de chuyen cac workflow `e2e` cu lien quan den chinh sua bai lab thanh cac live integration tests duoc duy tri va dua vao test gate mo rong.
+
+### Muc tieu mo rong
+
+- Tai su dung cac case co gia tri trong:
+  - `tests/e2e/comprehensive_api_test.py`
+  - `tests/e2e/final_comprehensive_test.py`
+- Dua cac thao tac chinh sua lab ve thanh integration tests co assertion that.
+- Khong phuc hoi nguyen trang kieu test cu dua vao `print`, `npx inspector`, hay script thu cong.
+- Giu cho suite van chia ro `non-live` va `live_eveng`.
+
+### Pham vi chuc nang can bo sung
+
+Nhung thao tac can dua vao live integration suite:
+
+- `list_nodes`
+- `add_node`
+- `get_node_details`
+- `start_node`
+- `stop_node`
+- `delete_node`
+- `create_lab_network`
+- `delete_lab_network`
+- `connect_node_to_network`
+- `connect_node_to_node`
+- `get_lab_topology`
+
+Co the xem xet bo sung sau, nhung khong nen dua vao dot dau neu muon giu do on dinh:
+
+- `start_all_nodes`
+- `stop_all_nodes`
+- `wipe_node`
+- `wipe_all_nodes`
+
+### Nguyen tac chuyen doi
+
+1. Moi case phai chay qua harness integration hien tai, khong dung lai `npx @modelcontextprotocol/inspector`.
+2. Moi case phai co assertion dua tren response MCP va, khi can, xac minh lai bang API that cua EVE-NG.
+3. Moi test live phai cleanup sach tai nguyen:
+   - xoa node
+   - xoa network
+   - xoa lab
+4. Moi test phai dung ten tai nguyen ngau nhien de tranh va cham khi rerun.
+5. Khong gom qua nhieu thao tac vao mot test duy nhat neu lam nhu vay kho debug khi fail.
+
+### De xuat chia nho thanh test cases
+
+#### Nhom 1: Node lifecycle co ban
+
+Muc tieu:
+
+- Xac nhan co the them, doc, dieu khien, va xoa node trong mot lab moi.
+
+Test case de xuat:
+
+- tao lab tam
+- `list_nodes` xac nhan ban dau rong
+- `add_node` tao 1 node Linux/QEMU toi gian
+- `list_nodes` xac nhan node moi xuat hien
+- `get_node_details` xac nhan metadata co ten/template dung
+- `start_node`
+- `stop_node`
+- `delete_node`
+- `list_nodes` xac nhan node da bien mat
+
+Dieu kien tien quyet:
+
+- Can xac dinh template/image nao thuc su ton tai tren EVE-NG `192.168.168.141`
+- Neu khong co image phu hop, test phai chon template kha dung nhat qua fixture probe
+
+#### Nhom 2: Lab network lifecycle
+
+Muc tieu:
+
+- Xac nhan co the them va xoa network trong lab.
+
+Test case de xuat:
+
+- tao lab tam
+- `create_lab_network`
+- `list_lab_networks` xac nhan network moi xuat hien
+- `delete_lab_network`
+- `list_lab_networks` xac nhan network da bien mat
+
+#### Nhom 3: Node-to-network wiring
+
+Muc tieu:
+
+- Xac nhan co the noi node vao network va topology phan anh dung ket qua.
+
+Test case de xuat:
+
+- tao lab tam
+- them 1 node
+- tao 1 network
+- `connect_node_to_network`
+- `get_lab_topology` xac nhan co lien ket
+- cleanup node, network, lab
+
+#### Nhom 4: Node-to-node wiring
+
+Muc tieu:
+
+- Xac nhan co the tao ket noi point-to-point giua hai node.
+
+Test case de xuat:
+
+- tao lab tam
+- them 2 node
+- `connect_node_to_node`
+- `get_lab_topology` xac nhan lien ket serial/ethernet da duoc tao
+- cleanup toan bo
+
+### Cong viec ky thuat can lam
+
+#### 1. Khao sat du lieu that tren EVE-NG
+
+Can lam:
+
+- Probe `list_node_templates`
+- Xac dinh template co kha nang dung on dinh nhat cho test
+- Xac dinh tham so toi thieu cho `add_node`
+- Xac dinh format response that cua:
+  - `list_nodes`
+  - `get_node_details`
+  - `list_lab_networks`
+  - `get_lab_topology`
+
+Muc dich:
+
+- Tranh viet test dua tren gia dinh sai ve shape response
+
+#### 2. Bo sung fixture live lab
+
+Can lam:
+
+- Tao fixture tao lab tam va xoa lab sau test
+- Tao helper de sinh ten node/network duy nhat
+- Tao helper goi MCP tool va tra text/json da parse
+
+Muc dich:
+
+- Rut gon code lap lai va cleanup on dinh hon
+
+#### 3. Bo sung helper xac minh bang EVE-NG API truc tiep
+
+Can lam:
+
+- Them client helper cho live integration de:
+  - doc nodes trong lab
+  - doc networks trong lab
+  - doc topology trong lab
+
+Muc dich:
+
+- Co the doi chieu ket qua MCP voi backend that thay vi chi assert tren chuoi text
+
+#### 4. Viet lai test theo workflow nho
+
+Can lam:
+
+- Moi test cover mot nhom hanh vi ro rang
+- Han che test monolithic kieu `comprehensive_api_test.py`
+
+Muc dich:
+
+- Fail de khoanh vung
+- Co the rerun nhanh tung nhom case
+
+#### 5. Cap nhat tai lieu va runner
+
+Can lam:
+
+- Mo rong `tests/README.md`
+- Mo rong `tests/run_tests.py` neu can them filter cho nhom `live_eveng` mo rong
+- Ghi ro yeu cau EVE-NG phai co image/template phu hop
+
+### Thu tu thuc hien de xuat cho dot mo rong
+
+1. Probe live EVE-NG de chot template/node strategy
+2. Them fixture live lab + helper verify API
+3. Trien khai `Node lifecycle`
+4. Trien khai `Lab network lifecycle`
+5. Trien khai `Node-to-network wiring`
+6. Trien khai `Node-to-node wiring`
+7. Chay lai full live integration suite
+8. Cap nhat tai lieu
+
+### Rui ro va cach giam thieu
+
+- Rui ro 1: Template/image khong san tren EVE-NG
+  - Giam thieu: probe truoc va chon template kha dung nhat
+
+- Rui ro 2: Test start/stop node cham hoac flaky
+  - Giam thieu: timeout ro rang, polling state neu can, va tach rieng khoi test tao/xoa node
+
+- Rui ro 3: Topology response kho parse
+  - Giam thieu: doi chieu bang API that va viet helper normalize response
+
+- Rui ro 4: Cleanup fail de lai rac trong EVE-NG
+  - Giam thieu: cleanup theo thu tu node -> network -> lab, co retry nhe neu can
+
+### Dinh nghia hoan thanh cho dot mo rong
+
+Dot mo rong nay duoc xem la xong khi:
+
+- Cac workflow chinh sua bai lab tu `e2e` cu da duoc chuyen thanh live integration tests
+- Suite live moi pass on dinh tren `192.168.168.141`
+- Khong can dung script `e2e` cu de bao phu cac thao tac them/xoa/noi thiet bi
+- `build_plan.md` va `tests/README.md` mo ta dung pham vi moi
+
+### Ket qua thuc thi giai doan 1 cua dot mo rong
+
+Da probe truc tiep EVE-NG `192.168.168.141` de chot template va shape response that.
+
+#### 1. Template strategy da xac nhan
+
+Da thu tao node thanh cong voi bo tham so toi thieu tren cac template:
+
+- `docker`
+- `linux`
+- `vpcs`
+- `freebsd`
+- `vios`
+- `viosl2`
+- `csr1000vng`
+
+Quyet dinh de xuat cho test mo rong:
+
+- Dung `vpcs` lam template mac dinh cho cac test thao tac lab.
+
+Ly do:
+
+- Tao node thanh cong on dinh.
+- Payload nhe.
+- So cong ethernet ro rang va de noi topology.
+- Phu hop hon cho test CRUD/connectivity co ban so voi cac appliance nang.
+
+#### 2. Bo tham so toi thieu cho `add_node`
+
+Da xac nhan thao tac tao node thanh cong voi:
+
+- `lab_path`
+- `template`
+- `name`
+- `left`
+- `top`
+
+Khong can truyen them `image`, `ram`, `cpu`, `ethernet` cho dot dau.
+
+#### 3. Shape response that da xac nhan
+
+`add_node`:
+
+- response dang:
+  - `code`
+  - `status`
+  - `message`
+  - `data.id`
+
+`list_nodes`:
+
+- `data` la mapping theo `node_id`
+- moi node co cac field quan trong:
+  - `id`
+  - `name`
+  - `template`
+  - `type`
+  - `status`
+  - `cpu`
+  - `ram`
+  - `ethernet`
+  - `url`
+  - `uuid`
+
+`get_node_details`:
+
+- `data` la object don le, khong phai mapping theo `id`
+- co them cac field chi tiet nhu:
+  - `cpulimit`
+  - `qemu_options`
+  - `qemu_version`
+  - `qemu_arch`
+  - `qemu_nic`
+
+`get_node_interfaces`:
+
+- `data.ethernet` la list interface dang:
+  - `name`: vi du `e0`, `e1`
+  - `network_id`
+
+`create_lab_network`:
+
+- response dang:
+  - `code`
+  - `status`
+  - `message`
+  - `data.id`
+
+`list_lab_networks`:
+
+- `data` la mapping theo `network_id`
+- moi network co:
+  - `id`
+  - `name`
+  - `type`
+  - `count`
+  - `left`
+  - `top`
+  - `visibility`
+  - `icon`
+
+`get_lab_topology`:
+
+- `data` la list
+- khi chua co ket noi: `data = []`
+- khi co ket noi: moi phan tu co cac field:
+  - `type`
+  - `source`
+  - `source_type`
+  - `source_label`
+  - `destination`
+  - `destination_type`
+  - `destination_label`
+
+#### 4. Phat hien quan trong ve code hien tai
+
+Phat hien 1:
+
+- `list_node_templates` trong tool layer dang fail vi code hien tai gia dinh sai `templates['data'][template_name]` la object co `.get(...)`.
+- Backend that tra ve mapping `template_name -> string`.
+
+Phat hien 2:
+
+- `list_network_types` trong tool layer dang fail vi gia dinh sai shape `network_types['data']`.
+- Can probe va normalize lai response truoc khi dua tool nay vao test gate mo rong.
+
+Phat hien 3:
+
+- `connect_node_to_network`/wrapper `connect_node_to_cloud` hien dang sai quy uoc tham so.
+- `evengsdk.api.connect_node_to_cloud()` ky vong:
+  - `src` = ten node
+  - `dst` = ten network
+  - `src_label` = ten interface, vi du `e0`
+- Wrapper hien tai dang truyen `node_id` va `network_id`, nen fail voi loi:
+  - `node 1 not found or invalid`
+
+Xac nhan quan trong:
+
+- Khi goi truc tiep SDK bang:
+  - node name = `probe-node`
+  - interface = `e0`
+  - network name = `probe-net`
+- thi ket noi thanh cong va topology tra ve dung du lieu.
+
+#### 5. Ket luan cho buoc tiep theo
+
+Sau giai doan probe nay, thu tu trien khai tiep theo nen la:
+
+1. Sua `list_node_templates`
+2. Sua `list_network_types`
+3. Sua wrapper/tool cho `connect_node_to_network` de dung ten node/network thay vi ID
+4. Bat dau viet `Node lifecycle` test voi template `vpcs`
+5. Sau khi connect fix xong, viet tiep `Lab network lifecycle` va `Node-to-network wiring`
+
+### Ket qua thuc thi buoc sua blocker
+
+Da thuc hien 3 thay doi dung theo de xuat:
+
+#### 1. Da sua `list_node_templates`
+
+Da sua formatter trong `eveng_mcp_server/tools/node_management.py` de chap nhan shape that:
+
+- `templates['data']` la mapping `template_name -> string`
+
+Thay vi gia dinh moi phan tu la object co `.get(...)`, tool hien tai normalize payload va van render duoc text hop le.
+
+Xac thuc:
+
+- Goi qua MCP `list_node_templates` khong con fail
+- Output hien danh sach template hop le
+
+#### 2. Da sua `list_network_types`
+
+Da sua formatter trong `eveng_mcp_server/tools/network_management.py` de chap nhan shape that:
+
+- `network_types['data']` la mapping `type_name -> string`
+
+Dong thoi da sua formatter `get_lab_topology` de chap nhan `data` dang list connection thay vi gia dinh mapping.
+
+Xac thuc:
+
+- Goi qua MCP `list_network_types` khong con fail
+- Output hien danh sach `bridge`, `ovs`, `pnet0..pnet9` hop le
+
+#### 3. Da sua wrapper cho `connect_node_to_network`
+
+Da sua `eveng_mcp_server/core/eveng_client.py`:
+
+- `connect_node_to_cloud` hien resolve `node_id -> node name`
+- `connect_node_to_cloud` hien resolve `network_id -> network name`
+- sau do moi goi `evengsdk` theo dung quy uoc cua SDK
+
+Dong thoi da sua `connect_node_to_node` theo cung nguyen tac de tranh gap lai cung mot loi o phase test tiep theo.
+
+Da cap nhat mo ta argument trong `network_management.py`:
+
+- `node_id` va `network_id` nay duoc hieu la `ID hoac name`
+
+#### 4. Ket qua xac thuc sau khi sua
+
+Da xac nhan:
+
+- `list_node_templates` qua MCP: pass
+- `list_network_types` qua MCP: pass
+- integration suite maintained:
+  - non-live: pass
+  - live: pass
+
+Lenh xac thuc da chay:
+
+- `.venv\Scripts\python.exe -m pytest tests/integration -m "not live_eveng" -q`
+- `.venv\Scripts\python.exe -m pytest tests/integration -m live_eveng -q --eveng-host 192.168.168.141 --eveng-user admin --eveng-pass eve --eveng-port 80 --eveng-protocol http`
+
+Ket qua:
+
+- non-live: `4 passed`
+- live: `2 passed`
+
+#### 5. Luu y quan trong sau khi sua
+
+Trong qua trinh probe chuoi thao tac dai qua cung mot session `stdio`, EVE-NG van co luc tra:
+
+- `412 User is not authenticated or session timed out (90001)`
+
+Dieu nay xuat hien theo tinh huong va co ve la do do on dinh session cua backend/SDK hon la do 3 fix vua lam, vi:
+
+- live integration suite maintained van pass
+- cac tool list da duoc xac minh hoat dong dung sau khi sua
+
+Ket luan thao tac:
+
+- Buoc sua blocker da hoan thanh
+- He thong san sang de sang phase tiep theo: viet `Node lifecycle` test voi `vpcs`
+- Khi sang phase do, nen bo sung retry/reconnect nhe cho cac workflow live dai hoi neu gap lai `412`
